@@ -1,0 +1,14 @@
+# 依赖与构建产物（本项目零依赖，基本用不到）
+node_modules/
+package-lock.json
+
+# 调试/抓取过程中的临时目录
+_debug/
+_recon/
+_gen/
+.vscode/.chrome-profile/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,2136 @@
+@charset "UTF-8";
+/* ============================================================
+   FitPlan 本地版 · views.css
+   业务页与浮层（柔和渐变玻璃拟态 v2）
+   ------------------------------------------------------------
+   负责：训练 / 饮食 / 体重 / 设置四个页面的内部结构，
+        动作编辑 / 沉浸训练 / 组间计时器三个浮层，以及打印导出。
+   不负责：设计令牌、外壳（侧边栏 / 顶栏 / 底栏）、通用组件与首页
+          仪表盘 —— 那些在 css/shell.css 中定义，本文件只做业务
+          排版、业务状态与响应式（宽表折叠等）。
+   约束：纯 CSS，不含任何外部资源（字体 / 图标 / 网络请求）；rem/em
+        尺寸，根字号 16px 与 18px 两档都不破版；移动端无页面级横向溢出。
+   ============================================================ */
+
+/* ============================================================
+   0. 令牌别名与桥接
+   ------------------------------------------------------------
+   shell.css 定义全部基础令牌；这里只建 --vw-* 别名，并在 var()
+   的兜底位写 design-v2 §1 的值：既让 shell.css 的深色主题覆盖
+   自动生效，也保证样式拆分加载 / 单独调试时业务页仍有玻璃质感。
+   本段不重写任何 shell 令牌。======================================== */
+:root {
+  --vw-glass: var(--glass, rgba(255, 255, 255, 0.55));
+  --vw-glass-strong: var(--glass-strong, rgba(255, 255, 255, 0.7));
+  --vw-glass-inset: var(--glass-inset, rgba(255, 255, 255, 0.45));
+  --vw-glass-border: var(--glass-border, rgba(255, 255, 255, 0.7));
+  --vw-hair: var(--glass-hair, rgba(15, 23, 42, 0.06));
+  --vw-line: var(--line, rgba(15, 23, 42, 0.1));
+  --vw-line-strong: var(--line-strong, rgba(15, 23, 42, 0.18));
+  --vw-blur: var(--blur, 20px);
+  --vw-surface: var(--surface, rgba(255, 255, 255, 0.72));
+
+  --vw-shadow-sm: var(--shadow-sm, 0 4px 14px rgba(15, 23, 42, 0.06));
+  --vw-shadow-md: var(--shadow-md, 0 12px 32px rgba(79, 70, 229, 0.1), 0 1px 4px rgba(15, 23, 42, 0.04));
+  --vw-shadow-lg: var(--shadow-lg, 0 24px 60px rgba(79, 70, 229, 0.14), 0 2px 10px rgba(15, 23, 42, 0.05));
+
+  --vw-accent: var(--accent, #4f46e5);
+  --vw-accent-ink: var(--accent-ink, var(--accent, #4f46e5));
+  --vw-accent-2: var(--accent-2, #06b6d4);
+  --vw-accent-3: var(--accent-3, #8b5cf6);
+  --vw-grad: var(--accent-grad, linear-gradient(135deg, #6366f1 0%, #06b6d4 100%));
+  --vw-grad-soft: var(--accent-grad-soft, linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(6, 182, 212, 0.16)));
+
+  --vw-ok: var(--ok, #10b981);
+  --vw-warn: var(--warn, #f59e0b);
+  --vw-danger: var(--danger, #ef4444);
+
+  --vw-text: var(--text, #0f172a);
+  --vw-text-2: var(--text-2, #475569);
+  --vw-text-3: var(--text-3, #8794a8);
+
+  --vw-r-xl: var(--radius-xl, 28px);
+  --vw-r: var(--radius, 20px);
+  --vw-r-sm: var(--radius-sm, 14px);
+  --vw-pill: var(--radius-pill, 999px);
+  --vw-focus: var(--focus-ring, rgba(79, 70, 229, 0.55));
+}
+
+/* 画布取色桥接：js/weight.js 的 palette() 从 html 计算样式按候选名读取
+   颜色（--accent-color / --line / --text-2 / --surface）。--line / --text-2 /
+   --surface 由 shell.css 提供，这里只补 weight.js 认识的别名 --accent-color，
+   并映射到会随深色主题变化的 --accent-ink，避免图表停留在旧的绿色系。 */
+:root {
+  --accent-color: var(--accent-ink, var(--accent, #4f46e5));
+}
+
+/* ============================================================
+   1. 业务范围内的公共状态 / 工具
+   ============================================================ */
+.strong {
+  font-weight: 700;
+  color: var(--vw-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.warn {
+  color: #b45309;
+}
+
+.ok {
+  color: var(--vw-ok);
+}
+
+html[data-theme="dark"] .warn {
+  color: #fbbf24;
+}
+
+/* 浮层打开时锁滚动（由 training.js 加在 body 上） */
+body.no-scroll {
+  overflow: hidden;
+}
+
+/* 玻璃卡基座：训练日折叠卡 / 肌群覆盖 / 餐次卡等业务卡片共用。
+   通用 .glass / .panel 由 shell.css 提供，这里只兜底业务卡片。 */
+.coverage,
+.day-card {
+  background: var(--vw-glass);
+  border: 1px solid var(--vw-glass-border);
+  border-radius: var(--vw-r);
+  box-shadow: var(--vw-shadow-md);
+  -webkit-backdrop-filter: blur(var(--vw-blur)) saturate(160%);
+  backdrop-filter: blur(var(--vw-blur)) saturate(160%);
+}
+
+/* ============================================================
+   2. 训练页 —— 计划介绍
+   ============================================================ */
+.plan-intro {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* 左上柔和光晕，给「计划头卡」一点强调色而不抢正文 */
+.plan-intro::before {
+  content: "";
+  position: absolute;
+  inset: -45% 45% auto -30%;
+  height: 15rem;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.06) 62%, transparent 78%);
+  pointer-events: none;
+}
+
+.plan-intro h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.3rem;
+  font-size: 1.04rem;
+  font-weight: 750;
+  line-height: 1.45;
+  color: var(--vw-text);
+}
+
+.plan-intro h3::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 0.32rem;
+  height: 1.05rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad);
+}
+
+.plan-intro p {
+  margin: 0;
+  font-size: 0.87rem;
+  line-height: 1.65;
+  color: var(--vw-text-2);
+}
+
+/* 训练提示条 */
+.tip-box {
+  position: relative;
+  margin: 0;
+  padding: 0.68rem 0.9rem 0.68rem 1.15rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-grad-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--vw-text-2);
+}
+
+.tip-box::before {
+  content: "";
+  position: absolute;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.48rem;
+  width: 0.2rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad);
+}
+
+html[data-theme="dark"] .tip-box {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================================
+   3. 训练页 —— 肌群覆盖
+   ============================================================ */
+.coverage {
+  padding: 1rem 1.05rem 1.1rem;
+}
+
+.coverage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.coverage-head h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--vw-text);
+}
+
+.coverage-head h4::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.34rem;
+  background: var(--vw-grad);
+  box-shadow: 0 0.25rem 0.6rem rgba(79, 70, 229, 0.28);
+}
+
+.coverage-head span {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--vw-text-3);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+/* .chip 基础样式由 shell.css 提供；这里只做肌群覆盖卡内的业务配色 */
+.coverage .chip {
+  border: 1px solid var(--vw-line);
+  background: var(--vw-glass-inset);
+  color: var(--vw-text-2);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.coverage .chip b {
+  color: var(--vw-accent-ink);
+  font-weight: 750;
+}
+
+/* 风险修饰：超频肌群 / 未覆盖大肌群（.chip 在 JS 里追加这两个修饰类） */
+.chip.badge-warn {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.chip.badge-warn b {
+  color: #b45309;
+}
+
+.chip.badge-muted {
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--vw-text-3);
+}
+
+.chip.badge-muted b {
+  color: var(--vw-text-2);
+}
+
+html[data-theme="dark"] .chip.badge-warn,
+html[data-theme="dark"] .chip.badge-warn b {
+  color: #fbbf24;
+}
+
+.coverage-note {
+  margin: 0.55rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--vw-text-3);
+  overflow-wrap: anywhere;
+}
+
+/* ============================================================
+   4. 训练页 —— 训练日折叠卡
+   ============================================================ */
+.day-card {
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.28s ease, box-shadow 0.28s ease;
+}
+
+.day-card:hover {
+  box-shadow: var(--vw-shadow-lg);
+}
+
+.day-card.is-open,
+.day-card.open {
+  border-color: rgba(99, 102, 241, 0.26);
+  box-shadow: var(--vw-shadow-lg);
+}
+
+.day-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.72rem 0.8rem 0.72rem 1rem;
+}
+
+/* 左侧渐变竖条：折叠卡 / 餐次卡的统一识别元素 */
+.day-head::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  bottom: 0.85rem;
+  left: 0;
+  width: 0.22rem;
+  border-radius: 0 0.22rem 0.22rem 0;
+  background: var(--vw-grad);
+  opacity: 0.85;
+}
+
+.day-toggle {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  margin: 0;
+  padding: 0.15rem 0;
+  border: 0;
+  border-radius: 0.7rem;
+  background: transparent;
+  color: var(--vw-text);
+  font: inherit;
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.day-toggle > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.day-head small {
+  display: block;
+  margin-top: 0.12rem;
+  font-size: 0.77rem;
+  font-weight: 500;
+  color: var(--vw-text-3);
+}
+
+.chev {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad-soft);
+  color: var(--vw-accent-ink);
+  font-size: 0.85rem;
+  line-height: 1;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.day-card.is-open .chev,
+.day-card.open .chev {
+  transform: rotate(180deg);
+}
+
+/* 折叠体：默认收起，.is-open / .open 展开（JS 用 classList.toggle 切换） */
+.day-body {
+  display: none;
+  padding: 0.85rem 0.7rem 0.8rem;
+  border-top: 1px solid var(--vw-hair);
+}
+
+.day-card.is-open .day-body,
+.day-card.open .day-body {
+  display: block;
+}
+
+/* 日头右侧「开始训练」在窄屏换行占满 */
+.day-head > .btn {
+  flex: 0 0 auto;
+}
+
+/* ============================================================
+   5. 训练页 —— 7 列动作表（.day-body 作用域）
+   ============================================================ */
+.day-body .table-wrap {
+  margin: 0;
+  border-radius: var(--vw-r-sm);
+}
+
+.day-body .table-wrap table {
+  min-width: 54rem;
+}
+
+.day-body .table-wrap th {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--vw-text-3);
+  white-space: nowrap;
+}
+
+.day-body .table-wrap td {
+  vertical-align: top;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--vw-text-2);
+}
+
+.day-body .table-wrap td:first-child {
+  width: 2.6rem;
+  text-align: center;
+  color: var(--vw-text-3);
+}
+
+.day-body .table-wrap td:nth-child(2) {
+  min-width: 13rem;
+}
+
+.day-body .table-wrap td:nth-child(4),
+.day-body .table-wrap td:nth-child(5) {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-body .table-wrap th:nth-child(6),
+.day-body .table-wrap td:nth-child(6) {
+  text-align: center;
+}
+
+.day-body .table-wrap td:nth-child(6) .btn {
+  width: 2.4rem;
+  min-width: 2.4rem;
+  min-height: 2.4rem;
+  padding: 0;
+  border-radius: var(--vw-pill);
+}
+
+/* 动作演示图：本地 webp / 线上图 / 内联 SVG 占位三级兜底都按同一尺寸显示 */
+.demo-img-wrap {
+  width: 4.6rem;
+  height: 3.15rem;
+  margin: 0 0 0.35rem;
+  overflow: hidden;
+  border-radius: 0.65rem;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--vw-hair), var(--vw-shadow-sm);
+}
+
+.demo-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+/* 行内操作 */
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.32rem;
+  margin-top: 0.4rem;
+}
+
+.row-actions .btn {
+  min-height: 2rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: var(--vw-pill);
+  font-size: 0.75rem;
+}
+
+/* 动作要点 / 常见错误 */
+.tip-cell {
+  min-width: 16rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--vw-text-2);
+}
+
+.tip-mistake {
+  display: block;
+  margin-top: 0.4rem;
+  padding: 0.32rem 0.55rem;
+  border-radius: 0.55rem;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.tip-mistake.warn {
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.tip-mistake.ok {
+  border: 1px solid rgba(16, 185, 129, 0.26);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+html[data-theme="dark"] .demo-img-wrap,
+html[data-theme="dark"] .demo-img {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .tip-mistake.warn {
+  color: #fbbf24;
+}
+
+html[data-theme="dark"] .tip-mistake.ok {
+  color: #34d399;
+}
+
+/* ============================================================
+   6. 训练页 —— 训练日历
+   ============================================================ */
+.cal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.cal-head h3 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--vw-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-nav {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-pill);
+  background: var(--vw-glass-inset);
+  color: var(--vw-text);
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.cal-nav:hover {
+  background: var(--vw-grad-soft);
+  color: var(--vw-accent-ink);
+  transform: translateY(-1px);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.cal-dow {
+  padding: 0.25rem 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-align: center;
+  color: var(--vw-text-3);
+}
+
+.cal-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.12rem;
+  min-width: 0;
+  min-height: 3.3rem;
+  padding: 0.42rem 0.2rem 0.45rem;
+  overflow: hidden;
+  border: 1px solid var(--vw-line);
+  border-radius: 0.8rem;
+  background: var(--vw-glass-inset);
+  color: var(--vw-text-2);
+  font: inherit;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+button.cal-cell {
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+button.cal-cell:hover {
+  border-color: rgba(99, 102, 241, 0.34);
+  background-color: rgba(99, 102, 241, 0.08);
+  transform: translateY(-1px);
+}
+
+.cal-date {
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--vw-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-workout {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--vw-accent-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-check {
+  position: absolute;
+  top: 0.26rem;
+  right: 0.28rem;
+  display: grid;
+  place-items: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-ok);
+  color: #fff;
+  font-size: 0.58rem;
+  line-height: 1;
+  box-shadow: 0 0.2rem 0.5rem rgba(16, 185, 129, 0.4);
+}
+
+/* 今天：渐变描边（mask 自体描边，不依赖底层背景色） */
+.cal-cell.is-today::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 0.1rem;
+  border-radius: inherit;
+  background: var(--vw-grad);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 训练日：淡渐变底 + 强调描边 */
+.cal-cell.is-training {
+  border-color: rgba(99, 102, 241, 0.22);
+  background-color: var(--vw-glass-inset);
+  background-image: var(--vw-grad-soft);
+}
+
+.cal-cell.is-training .cal-date {
+  color: var(--vw-text);
+}
+
+/* 已打卡：绿色描边 + 右上角对勾（.cal-check 由 JS 追加） */
+.cal-cell.checked {
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+/* 非本月：弱化且不可点（JS 渲染为 div） */
+.cal-cell.other-month {
+  border-color: transparent;
+  background: transparent;
+  opacity: 0.4;
+}
+
+.cal-cell.other-month .cal-date {
+  color: var(--vw-text-3);
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 0.9rem;
+  font-size: 0.76rem;
+  color: var(--vw-text-3);
+}
+
+.cal-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-dot,
+.legend-pill {
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.legend-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad);
+}
+
+.legend-dot.today-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--vw-accent);
+}
+
+.legend-pill {
+  width: 0.9rem;
+  height: 0.6rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad-soft);
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+/* ============================================================
+   7. 训练页 —— 日程与提醒（复用设置页 .setting-*，见 §9）
+   ============================================================ */
+/* 周几多选：7 个分段按钮在窄屏换行；单字按钮限制最大宽度，
+   避免换行后最后一行被 flex-grow 拉成整行。 */
+#calendarContent .segmented {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#calendarContent .segmented .seg-btn {
+  flex: 1 1 auto;
+  min-width: 2rem;
+  max-width: 3.2rem;
+  padding-inline: 0.4rem;
+}
+
+.protein-block .segmented {
+  flex-wrap: wrap;
+}
+
+.protein-block .segmented .seg-btn {
+  flex: 1 1 auto;
+  min-width: 2.6rem;
+}
+
+/* 设置行里的状态说明（#waterStatus 在 .setting-row 内）：独占一行 */
+.setting-row > .notify-status {
+  flex: 1 1 100%;
+  margin: 0.2rem 0 0;
+}
+
+.notify-status:empty {
+  display: none;
+}
+
+.setting-row + .notify-status,
+.form-row + .notify-status {
+  margin-top: 0.4rem;
+}
+
+/* ============================================================
+   8. 训练页 —— 窄屏（≤40rem）动作表折叠成卡片
+   ------------------------------------------------------------
+   沿用旧文件策略：table/tbody/tr/td 全部 display:block，
+   用 td:nth-child(n)::before 补「肌群：/ 组数 × 次数：/ 组间休息：
+   / 计时：/ 要点：」标签；demo 图与行内操作收进动作单元格。
+   ============================================================ */
+@media (max-width: 40rem) {
+  .day-body .table-wrap {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .day-body .table-wrap table,
+  .day-body .table-wrap tbody,
+  .day-body .table-wrap tr,
+  .day-body .table-wrap td {
+    display: block;
+    width: auto;
+    min-width: 0;
+  }
+
+  .day-body .table-wrap table {
+    width: 100%;
+    min-width: 0;
+    font-size: 0.84rem;
+  }
+
+  .day-body .table-wrap thead {
+    display: none;
+  }
+
+  .day-body .table-wrap tr {
+    position: relative;
+    margin: 0 0 0.6rem;
+    padding: 0.7rem 0.8rem 0.75rem 2.4rem;
+    border: 1px solid var(--vw-line);
+    border-radius: var(--vw-r-sm);
+    background: var(--vw-glass-inset);
+    box-shadow: var(--vw-shadow-sm);
+  }
+
+  .day-body .table-wrap tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .day-body .table-wrap td {
+    padding: 0.15rem 0;
+    border: 0;
+    text-align: left;
+    white-space: normal;
+    color: var(--vw-text-2);
+  }
+
+  /* 行号：左上角渐变圆点 */
+  .day-body .table-wrap td:first-child {
+    position: absolute;
+    top: 0.72rem;
+    left: 0.7rem;
+    display: grid;
+    place-items: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border-radius: var(--vw-pill);
+    background: var(--vw-grad);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  /* 动作列：演示图 + 名称 + 行内操作一行排开 */
+  .day-body .table-wrap td:nth-child(2) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.6rem;
+  }
+
+  .day-body .table-wrap td:nth-child(2) .demo-img-wrap {
+    width: 3.6rem;
+    height: 2.5rem;
+    margin: 0;
+  }
+
+  .day-body .table-wrap td:nth-child(2) > .strong {
+    flex: 1 1 8rem;
+    font-size: 0.95rem;
+  }
+
+  .day-body .table-wrap td:nth-child(2) .row-actions {
+    flex: 1 1 100%;
+    margin-top: 0.1rem;
+  }
+
+  /* 3–7 列：前置文字标签 */
+  .day-body .table-wrap td:nth-child(n + 3) {
+    padding-top: 0.18rem;
+    font-size: 0.8rem;
+    line-height: 1.55;
+  }
+
+  .day-body .table-wrap td:nth-child(n + 3)::before {
+    color: var(--vw-text-3);
+    font-weight: 500;
+  }
+
+  .day-body .table-wrap td:nth-child(3)::before {
+    content: "肌群：";
+  }
+
+  .day-body .table-wrap td:nth-child(4)::before {
+    content: "组数 × 次数：";
+  }
+
+  .day-body .table-wrap td:nth-child(5)::before {
+    content: "组间休息：";
+  }
+
+  .day-body .table-wrap td:nth-child(6)::before {
+    content: "计时：";
+  }
+
+  /* 计时列在窄屏卡片里左对齐，标签与按钮同一行 */
+  .day-body .table-wrap td:nth-child(6) {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-align: left;
+  }
+
+  .day-body .table-wrap td:nth-child(6)::before {
+    flex: 0 0 auto;
+  }
+
+  .day-body .table-wrap td:nth-child(7)::before {
+    content: "要点：";
+  }
+
+  .day-body .table-wrap td:nth-child(6) .btn {
+    display: inline-flex;
+    width: auto;
+    min-width: 0;
+    min-height: 1.9rem;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.76rem;
+  }
+
+  .tip-cell,
+  .day-body .table-wrap .tip-cell {
+    min-width: 0;
+  }
+}
+
+/* ============================================================
+   9. 饮食页
+   ============================================================ */
+
+/* 每日目标摘要 / 模块说明 */
+.diet-target {
+  margin: 0.15rem 0 0.55rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-grad-soft);
+  color: var(--vw-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.diet-target:empty {
+  display: none;
+}
+
+.diet-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--vw-text-3);
+  overflow-wrap: anywhere;
+}
+
+.diet-hint:empty {
+  display: none;
+}
+
+/* 餐次网格：diet.js 复用 .day-card / .day-head / .day-body 结构，
+   且不给 .day-card 加 open/is-open，因此在本作用域内让 .day-body 常开。 */
+.meal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.9rem;
+}
+
+.meal-grid .day-head {
+  cursor: default;
+}
+
+.meal-grid .day-head b {
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--vw-text);
+  overflow-wrap: anywhere;
+}
+
+.meal-grid .day-body {
+  display: block;
+  padding: 0.55rem 0.95rem 0.95rem;
+  border-top: 1px solid var(--vw-hair);
+}
+
+.meal-kcal {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0.18rem 0.6rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 0.35rem 0.9rem rgba(79, 70, 229, 0.28);
+}
+
+.meal-desc {
+  margin: 0.15rem 0 0.5rem;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--vw-text-2);
+  overflow-wrap: anywhere;
+}
+
+/* 三大营养素：子元素必须是 <span>（diet.js 生成） */
+.meal-macros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.meal-macros span {
+  padding: 0.16rem 0.5rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-pill);
+  background: rgba(148, 163, 184, 0.13);
+  color: var(--vw-text-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.meal-macros span:first-child {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+html[data-theme="dark"] .meal-macros span:first-child {
+  color: #34d399;
+}
+
+/* 通用餐卡（保留供后续模块复用，diet.js 当前用 .day-card 结构） */
+.meal-card {
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--vw-glass-border);
+  border-radius: var(--vw-r);
+  background: var(--vw-glass);
+  box-shadow: var(--vw-shadow-sm);
+  -webkit-backdrop-filter: blur(var(--vw-blur)) saturate(160%);
+  backdrop-filter: blur(var(--vw-blur)) saturate(160%);
+}
+
+.meal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+/* 蛋白质来源切换 */
+.protein-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-glass-inset);
+}
+
+.protein-block .field-label {
+  margin: 0;
+}
+
+.protein-note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--vw-text-3);
+  overflow-wrap: anywhere;
+}
+
+/* 饮食建议列表 */
+.tip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tip-list li {
+  position: relative;
+  padding-left: 1.3rem;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  color: var(--vw-text-2);
+  overflow-wrap: anywhere;
+}
+
+.tip-list li::before {
+  content: "";
+  position: absolute;
+  top: 0.58em;
+  left: 0.18rem;
+  width: 0.46rem;
+  height: 0.46rem;
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad);
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.12);
+}
+
+/* 一周购物清单 */
+.shop-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.shop-head .panel-title {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.shop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0 1.1rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shop-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.48rem 0.1rem;
+  border-bottom: 1px dashed var(--vw-hair);
+  font-size: 0.85rem;
+}
+
+.shop-item:last-child {
+  border-bottom: 0;
+}
+
+.shop-name {
+  min-width: 0;
+  color: var(--vw-text-2);
+  overflow-wrap: anywhere;
+}
+
+.shop-amount {
+  flex: 0 0 auto;
+  color: var(--vw-accent-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 食材计算器说明 */
+.calc-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--vw-text-3);
+  overflow-wrap: anywhere;
+}
+
+.calc-hint:empty {
+  display: none;
+}
+
+/* 自定义食材列表 */
+.custom-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.custom-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-glass-inset);
+  font-size: 0.82rem;
+}
+
+.custom-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.55;
+  color: var(--vw-text-2);
+  overflow-wrap: anywhere;
+}
+
+.custom-info b {
+  color: var(--vw-text);
+}
+
+.custom-item .btn-danger {
+  flex: 0 0 auto;
+  min-height: 2.1rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: var(--vw-pill);
+  font-size: 0.76rem;
+}
+
+/* 食材表 / 营养参考表：6 列，窄屏在 .table-wrap 内横向滚动 */
+.panel .table-wrap table {
+  min-width: 34rem;
+}
+
+.panel .table-wrap th:nth-child(n + 3),
+.panel .table-wrap td:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel .table-wrap td:first-child {
+  min-width: 8rem;
+}
+
+/* 表格内的「自定义」徽标（.badge 基础样式在 shell.css） */
+.panel .table-wrap .badge {
+  margin-left: 0.35rem;
+  padding: 0.08rem 0.42rem;
+  border: 1px solid rgba(99, 102, 241, 0.24);
+  border-radius: var(--vw-pill);
+  background: var(--vw-grad-soft);
+  color: var(--vw-accent-ink);
+  font-size: 0.68rem;
+  font-weight: 600;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* 计算结果容器（diet.js 当前用 .stat-grid；保留 .result-box 兜底） */
+.result-box {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-glass-inset);
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--vw-text);
+}
+
+.result-box:empty {
+  display: none;
+}
+
+/* ============================================================
+   10. 体重页
+   ============================================================ */
+.weight-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 0.7rem;
+  align-items: end;
+  margin-top: 0.9rem;
+}
+
+.weight-form .field,
+.weight-target-row .field {
+  min-width: 0;
+}
+
+.weight-form > .btn {
+  min-height: 2.9rem;
+  white-space: nowrap;
+}
+
+.weight-target-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px dashed rgba(99, 102, 241, 0.28);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-grad-soft);
+}
+
+.weight-target-row .field {
+  flex: 1 1 12rem;
+}
+
+.weight-target-row .btn {
+  flex: 0 0 auto;
+  min-height: 2.9rem;
+}
+
+.weight-chart-wrap {
+  margin-top: 1rem;
+  padding: 0.9rem 0.9rem 0.55rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r);
+  background: var(--vw-glass-inset);
+}
+
+.volume-chart-wrap {
+  margin-top: 1.15rem;
+  padding: 0.95rem 0.9rem 0.9rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r);
+  background: var(--vw-glass-inset);
+}
+
+.volume-chart-wrap .panel-title {
+  margin: 0 0 0.6rem;
+  padding: 0;
+  border: 0;
+  font-size: 0.98rem;
+}
+
+.weight-tip {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--vw-text-3);
+  overflow-wrap: anywhere;
+}
+
+.weight-list,
+.session-list {
+  margin-top: 0.85rem;
+}
+
+.weight-list .table-wrap,
+.session-list .table-wrap {
+  margin-top: 0.55rem;
+}
+
+.weight-list .table-wrap table {
+  min-width: 30rem;
+}
+
+.session-list .table-wrap table {
+  min-width: 24rem;
+}
+
+.weight-list .btn,
+.session-list .btn {
+  min-height: 2.05rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--vw-pill);
+  font-size: 0.76rem;
+}
+
+/* 数字列右对齐，便于纵向比较 */
+.weight-list td:nth-child(2),
+.weight-list td:nth-child(3),
+.weight-list td:nth-child(4),
+.session-list td:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.weight-list td:first-child,
+.session-list td:first-child {
+  white-space: nowrap;
+}
+
+/* ============================================================
+   11. 设置页
+   ============================================================ */
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem 0.9rem;
+  margin: 0.6rem 0 0;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-glass-inset);
+}
+
+.setting-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--vw-text);
+  overflow-wrap: anywhere;
+}
+
+.setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* shell 的 input/select 默认 width:100%（表单列布局）；设置行里改成
+   内容宽度，让「间隔选择 + 开关按钮」并排而不是换行。 */
+.setting-actions select,
+.setting-actions input:not([type="file"]) {
+  width: auto;
+  min-width: 8.5rem;
+  max-width: 100%;
+}
+
+.setting-actions .btn {
+  min-width: auto;
+}
+
+.setting-row.danger {
+  border-color: rgba(239, 68, 68, 0.26);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.setting-row.danger .setting-label {
+  color: #b91c1c;
+}
+
+html[data-theme="dark"] .setting-row.danger .setting-label {
+  color: #fca5a5;
+}
+
+/* 参考文献（<details class="glass-card refs">） */
+.refs {
+  padding: 0;
+  overflow: hidden;
+}
+
+.refs > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.05rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.refs > summary::-webkit-details-marker {
+  display: none;
+}
+
+.refs > summary h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--vw-text);
+}
+
+.refs > summary::after {
+  content: "▾";
+  margin-left: auto;
+  color: var(--vw-text-3);
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: transform 0.25s ease;
+}
+
+.refs[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.refs ol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.2rem 1.25rem 1.2rem 2.35rem;
+  font-size: 0.78rem;
+  line-height: 1.65;
+  color: var(--vw-text-3);
+}
+
+.refs li::marker {
+  color: var(--vw-accent-ink);
+  font-weight: 700;
+}
+
+.refs em {
+  color: var(--vw-text-2);
+}
+
+/* 免责声明 / 版本信息 */
+.disclaimer {
+  border-left: 3px solid rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.07);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--vw-text-2);
+}
+
+.app-meta {
+  margin: 1.1rem 0 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--vw-text-3);
+}
+
+/* ============================================================
+   12. 浮层公共结构（.overlay / .overlay-card / .overlay-close 由 shell 提供）
+   ============================================================ */
+.edit-overlay {
+  z-index: 110;
+}
+
+.session-overlay {
+  z-index: 115;
+}
+
+.timer-overlay {
+  z-index: 120;
+}
+
+/* 业务浮层内的 hidden 安全网：JS 用 hidden 属性显隐，
+   若通用类（.btn 等）设置了 display，需要这条兜底。 */
+.session-rest[hidden],
+.session-actions > [hidden],
+.edit-actions > [hidden],
+.timer-actions > [hidden] {
+  display: none !important;
+}
+
+/* ============================================================
+   13. 动作编辑浮层
+   ============================================================ */
+.edit-overlay .overlay-card {
+  max-width: 34rem;
+}
+
+.edit-title {
+  margin: 0 0 0.9rem;
+  padding-right: 2rem;
+  font-size: 1.08rem;
+  font-weight: 750;
+  color: var(--vw-text);
+}
+
+.edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem 0.8rem;
+}
+
+.edit-grid .field {
+  min-width: 0;
+}
+
+.edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+}
+
+/* ============================================================
+   14. 沉浸训练浮层
+   ============================================================ */
+.session-overlay .overlay-card,
+.session-card {
+  width: min(30rem, 100%);
+  max-width: 30rem;
+  padding: 2.3rem 1.2rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  text-align: center;
+  border-radius: var(--vw-r-xl);
+  background: var(--vw-glass-strong);
+  border: 1px solid var(--vw-glass-border);
+  box-shadow: var(--vw-shadow-lg);
+  -webkit-backdrop-filter: blur(var(--vw-blur)) saturate(170%);
+  backdrop-filter: blur(var(--vw-blur)) saturate(170%);
+}
+
+.session-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.session-day {
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--vw-accent-ink);
+}
+
+.session-progress {
+  font-size: 0.78rem;
+  color: var(--vw-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-exercise {
+  margin-top: 0.1rem;
+  font-size: clamp(1.45rem, 5.5vw, 1.9rem);
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  color: var(--vw-text);
+  overflow-wrap: anywhere;
+}
+
+.session-gif {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.session-gif img {
+  display: block;
+  width: min(13rem, 62vw);
+  height: auto;
+  aspect-ratio: 16 / 10;
+  padding: 0.3rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-r-sm);
+  background: #fff;
+  object-fit: contain;
+  box-shadow: var(--vw-shadow-md);
+}
+
+/* 演示图尚未由 JS 写入 src 前不显示破图图标 */
+.session-gif img:not([src]),
+.session-gif img[src=""] {
+  visibility: hidden;
+}
+
+html[data-theme="dark"] .session-gif img {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.session-meta {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--vw-text-3);
+}
+
+.session-set {
+  font-size: clamp(1.1rem, 4vw, 1.32rem);
+  font-weight: 750;
+  color: var(--vw-accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-rest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-radius: var(--vw-r-sm);
+  background: var(--vw-grad-soft);
+}
+
+.session-rest-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--vw-text-3);
+}
+
+.session-rest-time {
+  font-size: clamp(2.6rem, 11vw, 3.6rem);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--vw-accent-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.session-actions .btn {
+  flex: 1 1 9rem;
+}
+
+/* ============================================================
+   15. 组间休息计时器浮层
+   ============================================================ */
+.timer-overlay .overlay-card,
+.timer-card {
+  width: min(26rem, 100%);
+  max-width: 26rem;
+  padding: 2.1rem 1.2rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  text-align: center;
+  border-radius: var(--vw-r-xl);
+  background: var(--vw-glass-strong);
+  border: 1px solid var(--vw-glass-border);
+  box-shadow: var(--vw-shadow-lg);
+  -webkit-backdrop-filter: blur(var(--vw-blur)) saturate(170%);
+  backdrop-filter: blur(var(--vw-blur)) saturate(170%);
+}
+
+.timer-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--vw-text-3);
+}
+
+/* 超大渐变数字 */
+.timer-display {
+  font-size: clamp(4.2rem, 20vw, 8rem);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  color: var(--vw-accent-ink);
+  font-variant-numeric: tabular-nums;
+  filter: drop-shadow(0 0.6rem 1.4rem rgba(79, 70, 229, 0.28));
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .timer-display {
+    background: var(--vw-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+.timer-display.running,
+.timer-display.is-running {
+  filter: drop-shadow(0 0 1.4rem rgba(6, 182, 212, 0.45));
+}
+
+.timer-presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.timer-preset {
+  min-width: 3.7rem;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--vw-line);
+  border-radius: var(--vw-pill);
+  background: var(--vw-glass-inset);
+  color: var(--vw-text);
+  font-size: 0.86rem;
+}
+
+.timer-preset:hover {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: var(--vw-grad-soft);
+  color: var(--vw-accent-ink);
+}
+
+.timer-preset.active {
+  border-color: transparent;
+  background: var(--vw-grad);
+  color: #fff;
+  box-shadow: 0 0.4rem 1rem rgba(79, 70, 229, 0.3);
+}
+
+.timer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 0.2rem;
+}
+
+.timer-actions .btn {
+  min-width: 8rem;
+}
+
+/* ============================================================
+   16. 业务页响应式补充（训练动作表折叠见 §8）
+   ============================================================ */
+@media (max-width: 48rem) {
+  .meal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .weight-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .weight-form > .btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 34rem) {
+  .day-head {
+    flex-wrap: wrap;
+  }
+
+  .day-toggle {
+    flex: 1 1 100%;
+  }
+
+  .day-head > .btn {
+    width: 100%;
+  }
+
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .setting-actions {
+    justify-content: flex-start;
+  }
+
+  .shop-list {
+    grid-template-columns: 1fr;
+  }
+
+  .weight-form {
+    grid-template-columns: 1fr;
+  }
+
+  .weight-target-row .btn {
+    flex: 1 1 100%;
+  }
+
+  .edit-actions .btn,
+  .timer-actions .btn,
+  .session-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  /* 与基础规则选择器保持同等特异性，才能覆盖浮层卡片的 padding */
+  .session-overlay .overlay-card,
+  .timer-overlay .overlay-card,
+  .session-card,
+  .timer-card {
+    padding-top: 2.2rem;
+  }
+}
+
+@media (max-width: 30rem) {
+  /* 7 列日历在超窄屏只保留色块 + 打卡点，避免文字挤压 */
+  .cal-workout {
+    display: none;
+  }
+
+  .calendar-grid {
+    gap: 0.25rem;
+  }
+
+  .cal-cell {
+    min-height: 2.7rem;
+    padding: 0.35rem 0.1rem 0.3rem;
+    border-radius: 0.6rem;
+  }
+
+  .cal-date {
+    font-size: 0.78rem;
+  }
+}
+
+/* ============================================================
+   17. 打印导出
+   ------------------------------------------------------------
+   app.js 的 printSection('training'|'diet') 只给 body 加
+   .print-training / .print-diet 后调用 window.print()，
+   这里负责：只保留目标视图、业务卡去玻璃、表格去滚动并展开、
+   隐藏按钮 / 浮层 / 图表装饰。
+   ============================================================ */
+@media print {
+  /* 单视图导出：隐藏其余页面，并强制目标页显示 */
+  body.print-training .view:not(#view-training),
+  body.print-diet .view:not(#view-diet) {
+    display: none !important;
+  }
+
+  body.print-training #view-training,
+  body.print-diet #view-diet {
+    display: block !important;
+  }
+
+  /* 折叠内容全部展开 */
+  .day-body,
+  .day-card.open .day-body,
+  .day-card.is-open .day-body,
+  .meal-grid .day-card .day-body {
+    display: block !important;
+  }
+
+  /* 业务卡：去玻璃 / 去阴影 / 细边框 */
+  .day-card,
+  .coverage,
+  .plan-intro,
+  .meal-card,
+  .meal-grid .day-card,
+  .refs,
+  .disclaimer,
+  .weight-chart-wrap,
+  .volume-chart-wrap,
+  .tip-box,
+  .setting-row,
+  .custom-item,
+  .protein-block,
+  .weight-target-row,
+  .result-box {
+    background: #fff !important;
+    border: 1px solid #999 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .day-card,
+  .meal-card,
+  .meal-grid .day-card,
+  .coverage,
+  .tip-box,
+  .setting-row,
+  .custom-item,
+  .refs {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* 表格去滚动并完整展开 */
+  .table-wrap {
+    overflow: visible !important;
+    border: 1px solid #999 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .day-body .table-wrap table,
+  .panel .table-wrap table {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 9pt;
+  }
+
+  .table-wrap th {
+    background: #eee !important;
+    color: #000 !important;
+    border-bottom: 1px solid #999 !important;
+  }
+
+  .table-wrap td {
+    border-top: 1px solid #bbb !important;
+  }
+
+  /* 打印时恢复标准表格布局（窄屏折叠规则在打印媒体下不生效，
+     这里再显式还原一次，防止极端窄纸面触发 ≤40rem 的卡片折叠） */
+  .day-body .table-wrap table {
+    display: table !important;
+  }
+
+  .day-body .table-wrap thead {
+    display: table-header-group !important;
+  }
+
+  .day-body .table-wrap tbody {
+    display: table-row-group !important;
+  }
+
+  .day-body .table-wrap tr {
+    display: table-row !important;
+  }
+
+  .day-body .table-wrap td {
+    display: table-cell !important;
+    padding: 0.35rem 0.4rem !important;
+  }
+
+  .day-body .table-wrap td:first-child {
+    position: static !important;
+    width: 2.4rem !important;
+    height: auto !important;
+    background: transparent !important;
+    color: #000 !important;
+  }
+
+  .day-body .table-wrap td:nth-child(2) {
+    display: table-cell !important;
+  }
+
+  .day-body .table-wrap td:nth-child(n + 3)::before {
+    content: none !important;
+  }
+
+  /* 「计时」列只有一个计时器按钮，打印时整列去掉 */
+  .day-body .table-wrap th:nth-child(6),
+  .day-body .table-wrap td:nth-child(6) {
+    display: none !important;
+  }
+
+  /* 日头标题是按钮（JS 用它折叠），打印时保留标题、隐藏折叠箭头 */
+  .day-toggle {
+    display: flex !important;
+    pointer-events: none;
+  }
+
+  .cal-cell {
+    display: flex !important;
+  }
+
+  /* 「每周训练日」的 7 个分段按钮不打印，整行一起隐藏，避免只剩标题 */
+  #calendarContent .panel:last-child .form-row:first-of-type {
+    display: none !important;
+  }
+
+  /* 交互元素一律不打印 */
+  .btn,
+  .row-actions,
+  .cal-nav,
+  .quick-links,
+  .form-actions,
+  .setting-actions,
+  .segmented,
+  .setting-row,
+  .notify-status,
+  .protein-block,
+  .cal-check,
+  .chev,
+  .demo-img-wrap,
+  .demo-img,
+  .overlay,
+  .overlay-card,
+  .overlay-close,
+  .toast,
+  .back-to-top,
+  .weight-form,
+  .weight-target-row,
+  .timer-presets,
+  .timer-actions,
+  .session-actions,
+  .session-gif,
+  .app-meta {
+    display: none !important;
+  }
+
+  .day-toggle {
+    pointer-events: none;
+  }
+
+  /* 日历：去渐变、去阴影，保留描边 */
+  .cal-cell,
+  .cal-cell.is-today,
+  .cal-cell.is-training,
+  .cal-cell.checked {
+    border: 1px solid #999 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .cal-cell.is-today::after {
+    display: none !important;
+  }
+
+  .cal-cell.other-month {
+    opacity: 1;
+    color: #777;
+  }
+
+  .cal-legend {
+    color: #000;
+  }
+
+  .chart-wrap {
+    overflow: visible !important;
+  }
+
+  .chart-wrap canvas {
+    max-width: 100%;
+    border: 1px solid #999;
+  }
+
+  .notify-status,
+  .coverage-note,
+  .diet-hint,
+  .weight-tip {
+    color: #333 !important;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+}
+
+/* ============================================================
+   18. 动效降级（业务元素自身的过渡）
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .day-card,
+  .chev,
+  .cal-nav,
+  .cal-cell,
+  .refs > summary::after,
+  .session-card,
+  .timer-card {
+    transition: none !important;
+  }
+
+  .timer-display {
+    filter: none !important;
+  }
+}

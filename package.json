@@ -1,0 +1,20 @@
+{
+  "name": "fit-daily",
+  "version": "1.2.0",
+  "private": true,
+  "description": "FitDaily 健身与饮食计划助手（本地版）：纯前端、零依赖、数据只存本机",
+  "scripts": {
+    "dev": "node scripts/dev-server.js",
+    "start": "node scripts/dev-server.js",
+    "test": "node tests/core.test.js && node tests/data.test.js && node tests/nutrition.test.js && node tests/app.smoke.js",
+    "test:core": "node tests/core.test.js",
+    "test:data": "node tests/data.test.js",
+    "test:nutrition": "node tests/nutrition.test.js",
+    "test:smoke": "node tests/app.smoke.js",
+    "dump": "node tests/app.smoke.js --dump",
+    "check:css": "node scripts/check-css.js",
+    "icons": "python scripts/generate-icons.py"
+  },
+  "keywords": ["fitness", "diet", "planner", "pwa", "vanilla-js"],
+  "license": "MIT"
+}

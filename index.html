@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>FitDaily · 健身与饮食计划助手</title>
+  <meta name="theme-color" content="#eef2ff" />
+  <meta name="description" content="根据身体数据自动生成个性化健身训练计划与饮食方案，支持体重追踪、训练打卡与日历提醒。" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="img/icon-192.png" />
+  <link rel="apple-touch-icon" href="img/icon-192.png" />
+  <link rel="stylesheet" href="css/shell.css" />
+  <link rel="stylesheet" href="css/views.css" />
+  <script>
+    // 提前应用主题与字号，避免首屏闪烁
+    (function () {
+      try {
+        if ((localStorage.getItem('fitdaily-theme') || localStorage.getItem('fitplan-theme')) === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        var f = Number(localStorage.getItem('fitdaily-font') || localStorage.getItem('fitplan-font')) || 16;
+        document.documentElement.style.fontSize = f + 'px';
+      } catch (e) { /* 隐私模式下忽略 */ }
+    })();
+  </script>
+</head>
+<body class="app">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <!-- 渐变光斑背景 -->
+  <div class="app-bg" aria-hidden="true">
+    <span class="blob blob-a"></span>
+    <span class="blob blob-b"></span>
+    <span class="blob blob-c"></span>
+  </div>
+
+  <!-- ==================== 桌面侧边栏 ==================== -->
+  <aside class="sidebar glass-strong" id="sidebar" aria-label="主导航">
+    <a class="brand" href="#view-home" aria-label="FitDaily 首页">
+      <span class="brand-logo" aria-hidden="true">🏋️</span>
+      <span class="brand-text"><b>FitDaily</b><small>健身与饮食助手</small></span>
+    </a>
+
+    <nav class="side-nav">
+      <button class="nav-btn side-link active" data-view="home" type="button">
+        <span class="nav-ico" aria-hidden="true">⌂</span><span>首页</span>
+      </button>
+      <button class="nav-btn side-link" data-view="training" type="button">
+        <span class="nav-ico" aria-hidden="true">▲</span><span>训练</span>
+      </button>
+      <button class="nav-btn side-link" data-view="diet" type="button">
+        <span class="nav-ico" aria-hidden="true">☰</span><span>饮食</span>
+      </button>
+      <button class="nav-btn side-link" data-view="weight" type="button">
+        <span class="nav-ico" aria-hidden="true">◔</span><span>体重</span>
+      </button>
+      <button class="nav-btn side-link" data-view="settings" type="button">
+        <span class="nav-ico" aria-hidden="true">⚙</span><span>设置</span>
+      </button>
+    </nav>
+
+    <div class="side-foot glass-inset" id="sideProfile">
+      <span class="side-dot" aria-hidden="true"></span>
+      <div class="side-profile-text">
+        <b id="sideProfileTitle">尚未生成计划</b>
+        <small id="sideProfileSub">填写身体数据开始</small>
+      </div>
+    </div>
+
+    <p class="side-version">数据只保存在本机 · <span id="sideVersion">v1.2.0</span></p>
+  </aside>
+
+  <div class="app-main">
+    <!-- ==================== 顶部条 ==================== -->
+    <header class="topbar glass" id="topbar">
+      <div class="topbar-left">
+        <span class="brand-mark mobile-only" aria-hidden="true">🏋️</span>
+        <div class="topbar-text">
+          <h1 class="topbar-title" id="viewTitle">概览</h1>
+          <p class="topbar-sub" id="viewSub">输入身体数据，生成你的训练与饮食计划</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="pill" id="topbarMeta" hidden></span>
+        <button class="icon-btn" id="heroThemeBtn" type="button" aria-label="切换深浅色模式" title="切换深浅色模式">◐</button>
+      </div>
+    </header>
+
+    <main class="container" id="main">
+      <!-- ==================== 首页：仪表盘 ==================== -->
+      <section id="view-home" class="view active" aria-label="首页概览">
+        <div id="dashboardRoot" class="dash"></div>
+
+        <details class="glass-card cfg-card" id="cfgCard" open>
+          <summary class="cfg-summary">
+            <span class="cfg-title">身体数据与目标</span>
+            <span class="cfg-hint">修改后点「生成我的计划」或直接修改会自动更新</span>
+          </summary>
+
+          <div class="form-panel">
+            <div class="form-row">
+              <div class="field">
+                <span class="field-label">性别</span>
+                <div class="segmented" id="sexSeg" role="group" aria-label="性别">
+                  <button type="button" class="seg-btn active" data-value="male">男</button>
+                  <button type="button" class="seg-btn" data-value="female">女</button>
+                </div>
+              </div>
+              <label class="field">
+                <span class="field-label">年龄</span>
+                <input type="number" id="age" min="14" max="90" value="25" inputmode="numeric" />
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label class="field">
+                <span class="field-label">身高 <span id="heightUnitLabel">（cm）</span></span>
+                <div class="input-with-unit">
+                  <input type="number" id="height" min="120" max="230" step="1" value="175" inputmode="decimal" />
+                  <span class="input-unit" id="heightUnitSuffix">cm</span>
+                </div>
+              </label>
+              <label class="field">
+                <span class="field-label">体重 <span id="weightUnitLabel">（kg）</span></span>
+                <div class="input-with-unit">
+                  <input type="number" id="weight" min="30" max="200" step="0.1" value="70" inputmode="decimal" />
+                  <span class="input-unit" id="weightUnitSuffix">kg</span>
+                </div>
+              </label>
+            </div>
+
+            <div class="form-row">
+              <label class="field">
+                <span class="field-label">体脂率 % <em class="field-optional">可选</em></span>
+                <input type="number" id="bodyFatInput" min="3" max="60" step="0.1" placeholder="用于更精准计算" inputmode="decimal" />
+              </label>
+              <label class="field">
+                <span class="field-label">训练器械</span>
+                <select id="equipment">
+                  <option value="gym" selected>健身房器械</option>
+                  <option value="home">居家无器械</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field-label">日常活动水平</span>
+              <select id="activity">
+                <option value="sedentary">久坐少动（办公室工作，几乎不运动）</option>
+                <option value="light" selected>轻度活动（每周 1–3 次训练）</option>
+                <option value="moderate">中度活动（每周 3–5 次训练）</option>
+                <option value="active">高度活动（每周 6–7 次训练）</option>
+                <option value="athlete">极高强度（体力工作 + 每天训练）</option>
+              </select>
+            </label>
+
+            <div class="form-row">
+              <label class="field">
+                <span class="field-label">健身目标</span>
+                <select id="goal">
+                  <option value="cut" selected>减脂（减重、降低体脂）</option>
+                  <option value="bulk">增肌（增加肌肉量）</option>
+                  <option value="maintain">保持 / 塑形</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">每周训练天数</span>
+                <select id="days">
+                  <option value="2">2 天</option>
+                  <option value="3" selected>3 天</option>
+                  <option value="4">4 天</option>
+                  <option value="5">5 天</option>
+                  <option value="6">6 天</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field" id="splitField" hidden>
+              <span class="field-label">4 天分化方式</span>
+              <select id="split">
+                <option value="upperlower" selected>上下肢分化（上肢 / 下肢各 2 次）</option>
+                <option value="bro">胸 · 背 · 肩 · 腿（每个部位 1 天）</option>
+              </select>
+            </label>
+
+            <div class="form-row">
+              <label class="field">
+                <span class="field-label">训练经验</span>
+                <select id="experience">
+                  <option value="beginner" selected>新手（&lt; 6 个月）</option>
+                  <option value="intermediate">中级（6 个月 – 2 年）</option>
+                  <option value="advanced">高级（2 年以上）</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="field-label">饮食偏好</span>
+                <select id="diet">
+                  <option value="normal" selected>普通饮食</option>
+                  <option value="vegetarian">蛋奶素</option>
+                  <option value="vegan">纯素</option>
+                  <option value="lowcarb">低碳水</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-primary btn-lg" id="generateBtn">生成我的计划</button>
+              <button type="button" class="btn btn-ghost" id="resetFormBtn">恢复默认</button>
+            </div>
+            <p class="disclaimer-inline">本工具为通用健身参考，不能替代医生或注册营养师的建议；如有慢性病或特殊情况，请先咨询专业人士。</p>
+            <p class="form-note" id="saveNote"></p>
+          </div>
+        </details>
+
+        <div class="glass-card results-panel" id="homeResults" hidden>
+          <div class="results-head">
+            <h2 class="panel-title">计划明细</h2>
+            <span class="profile-summary" id="profileSummary"></span>
+          </div>
+          <div class="stat-grid" id="statGrid"></div>
+
+          <div class="deficit-control" id="deficitControl" hidden>
+            <div class="deficit-head">
+              <span class="field-label" id="deficitLabel">热量缺口</span>
+              <b id="deficitValue">15%</b>
+            </div>
+            <input type="range" id="deficitSlider" min="10" max="20" step="1" value="15" aria-label="热量调整百分比" />
+            <p class="deficit-hint" id="deficitHint"></p>
+          </div>
+
+          <div class="macro-bar" id="macroBar" hidden>
+            <div class="macro-seg seg-protein" id="segProtein"><span>蛋白质</span></div>
+            <div class="macro-seg seg-carbs" id="segCarbs"><span>碳水</span></div>
+            <div class="macro-seg seg-fat" id="segFat"><span>脂肪</span></div>
+          </div>
+          <p class="macro-legend" id="macroLegend"></p>
+          <p class="macro-range-note" id="macroRangeNote"></p>
+
+          <div class="quick-links">
+            <button type="button" class="btn btn-primary" data-goto="training">查看训练计划 →</button>
+            <button type="button" class="btn btn-soft" data-goto="diet">查看饮食方案 →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 训练 ==================== -->
+      <section id="view-training" class="view" aria-label="训练计划">
+        <div id="trainingContent" class="stack"></div>
+        <div id="calendarContent" class="stack"></div>
+      </section>
+
+      <!-- ==================== 饮食 ==================== -->
+      <section id="view-diet" class="view" aria-label="饮食库">
+        <div id="dietContent" class="stack"></div>
+        <div id="foodsContent" class="stack"></div>
+      </section>
+
+      <!-- ==================== 体重 ==================== -->
+      <section id="view-weight" class="view" aria-label="体重追踪">
+        <div class="glass-card">
+          <h2 class="panel-title">体重 / 体脂追踪</h2>
+          <form id="weightForm" class="weight-form">
+            <label class="field">
+              <span class="field-label">日期</span>
+              <input type="date" id="weightDate" required />
+            </label>
+            <label class="field">
+              <span class="field-label">体重 <span id="weightFormUnit">（kg）</span></span>
+              <input type="number" id="weightKg" step="0.1" min="20" max="250" required inputmode="decimal" />
+            </label>
+            <label class="field">
+              <span class="field-label">体脂 % <em class="field-optional">可选</em></span>
+              <input type="number" id="bodyFat" step="0.1" min="3" max="60" placeholder="可选" inputmode="decimal" />
+            </label>
+            <button type="submit" class="btn btn-primary btn-lg">记录</button>
+          </form>
+
+          <div class="weight-target-row">
+            <label class="field">
+              <span class="field-label" id="targetWeightLabel">目标体重（kg）</span>
+              <input type="number" id="targetWeight" step="0.1" min="30" max="250" placeholder="可选" inputmode="decimal" />
+            </label>
+            <button type="button" class="btn btn-soft" id="saveTargetBtn">保存目标</button>
+          </div>
+
+          <div class="chart-wrap weight-chart-wrap">
+            <canvas id="weightChart" width="700" height="280" aria-label="体重变化曲线"></canvas>
+          </div>
+          <p class="weight-tip" id="weightTip"></p>
+          <div id="weightList" class="weight-list"></div>
+
+          <div class="chart-wrap volume-chart-wrap">
+            <h3 class="panel-title">训练容量趋势</h3>
+            <canvas id="volumeChart" width="700" height="220" aria-label="训练容量趋势"></canvas>
+            <div id="sessionList" class="session-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 设置 ==================== -->
+      <section id="view-settings" class="view" aria-label="设置">
+        <div class="glass-card">
+          <h2 class="panel-title">设置</h2>
+
+          <div class="setting-row">
+            <span class="setting-label">深色模式</span>
+            <div class="setting-actions">
+              <button type="button" class="btn btn-ghost" id="themeBtn" aria-pressed="false">切换到深色</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">字体大小</span>
+            <div class="segmented" id="fontSeg">
+              <button type="button" class="seg-btn active" data-font="16">标准</button>
+              <button type="button" class="seg-btn" data-font="18">大号</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">体重单位</span>
+            <div class="segmented" id="weightUnitSeg">
+              <button type="button" class="seg-btn active" data-unit="kg">kg</button>
+              <button type="button" class="seg-btn" data-unit="jin">斤</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">身高单位</span>
+            <div class="segmented" id="heightUnitSeg">
+              <button type="button" class="seg-btn active" data-unit="cm">cm</button>
+              <button type="button" class="seg-btn" data-unit="ft">英尺</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">饮水提醒</span>
+            <div class="setting-actions">
+              <select id="waterInterval" aria-label="饮水提醒间隔">
+                <option value="30">每 30 分钟</option>
+                <option value="60" selected>每 60 分钟</option>
+                <option value="90">每 90 分钟</option>
+                <option value="120">每 2 小时</option>
+              </select>
+              <button type="button" class="btn btn-ghost" id="waterBtn">开启饮水提醒</button>
+            </div>
+            <p class="notify-status" id="waterStatus"></p>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">导出</span>
+            <div class="setting-actions">
+              <button type="button" class="btn btn-primary" id="printTrainingBtn">导出训练计划 PDF</button>
+              <button type="button" class="btn btn-primary" id="printDietBtn">导出每日饮食 PDF</button>
+              <button type="button" class="btn btn-ghost" id="csvExportBtn">导出食材表 CSV</button>
+              <button type="button" class="btn btn-ghost" id="icsExportBtn">导出日历 (.ics)</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <span class="setting-label">数据备份</span>
+            <div class="setting-actions">
+              <button type="button" class="btn btn-ghost" id="exportDataBtn">导出备份 (JSON)</button>
+              <button type="button" class="btn btn-ghost" id="importDataBtn">导入备份</button>
+              <input type="file" id="importDataFile" accept=".json,application/json" hidden />
+            </div>
+          </div>
+
+          <div class="setting-row danger">
+            <span class="setting-label">清除全部本地数据</span>
+            <div class="setting-actions">
+              <button type="button" class="btn btn-danger" id="clearDataBtn">一键清空</button>
+            </div>
+          </div>
+
+          <p class="notify-status" id="settingsStatus"></p>
+        </div>
+
+        <details class="glass-card refs" id="refs">
+          <summary><h4>数据依据（参考文献）</h4></summary>
+          <ol id="refsList">
+            <li>Mifflin MD, et al. A new predictive equation for resting energy expenditure in healthy individuals. <em>Am J Clin Nutr</em>. 1990;51(2):241-247.</li>
+            <li>Morton RW, et al. A systematic review, meta-analysis and meta-regression of the effect of protein supplementation on resistance training-induced gains in muscle mass and strength in healthy adults. <em>Br J Sports Med</em>. 2018;52(6):376-384.</li>
+            <li>Aragon AA, et al. International society of sports nutrition position stand: diets and body composition. <em>J Int Soc Sports Nutr</em>. 2017;14:16.</li>
+            <li>Donnelly JE, et al. American College of Sports Medicine Position Stand. Appropriate intervention strategies for weight loss and prevention of weight regain for adults. <em>Med Sci Sports Exerc</em>. 2001;33(12):2145-2156.</li>
+            <li>Schoenfeld BJ, et al. Effects of resistance training frequency on measures of muscle hypertrophy: a systematic review and meta-analysis. <em>Sports Med</em>. 2016;46(11):1689-1697.</li>
+            <li>Kerksick CM, et al. ISSN exercise &amp; sports nutrition review update: research &amp; recommendations. <em>J Int Soc Sports Nutr</em>. 2018;15:38.</li>
+          </ol>
+        </details>
+
+        <div class="glass-card disclaimer">
+          温馨提示：以上内容基于通用健身营养学原理估算，仅供参考。如有基础疾病或特殊情况，请在开始训练与调整饮食前咨询医生或注册营养师。所有数据仅保存在本机浏览器，不会上传。
+        </div>
+
+        <p class="app-meta">FitDaily 本地版 · <span id="appVersion">v1.2.0</span></p>
+      </section>
+    </main>
+
+    <footer class="footer">FitDaily · 训练与饮食计划助手 — 数据仅保存在本机浏览器 <span id="footerVersion"></span></footer>
+  </div>
+
+  <!-- ==================== 移动端底部浮岛导航 ==================== -->
+  <nav class="bottomnav glass" id="bottomnav" aria-label="底部导航">
+    <button class="nav-btn active" data-view="home" type="button" aria-current="page"><span class="nav-ico">⌂</span><span>首页</span></button>
+    <button class="nav-btn" data-view="training" type="button"><span class="nav-ico">▲</span><span>训练</span></button>
+    <button class="nav-btn" data-view="diet" type="button"><span class="nav-ico">☰</span><span>饮食</span></button>
+    <button class="nav-btn" data-view="weight" type="button"><span class="nav-ico">◔</span><span>体重</span></button>
+    <button class="nav-btn" data-view="settings" type="button"><span class="nav-ico">⚙</span><span>设置</span></button>
+  </nav>
+
+  <button type="button" class="back-to-top" id="backToTop" aria-label="回到顶部">↑</button>
+
+  <!-- ==================== 动作编辑浮层 ==================== -->
+  <div class="edit-overlay overlay" id="editOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <div class="overlay-card glass-strong">
+      <button class="overlay-close" id="editCloseBtn" type="button" aria-label="取消编辑">×</button>
+      <h3 class="edit-title" id="editTitle">编辑动作</h3>
+      <div class="edit-grid">
+        <label class="field">
+          <span class="field-label">动作</span>
+          <select id="editName"></select>
+        </label>
+        <label class="field">
+          <span class="field-label">目标肌群</span>
+          <input type="text" id="editMuscle" />
+        </label>
+        <label class="field">
+          <span class="field-label">组数</span>
+          <input type="number" id="editSets" min="1" max="10" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span class="field-label">次数</span>
+          <input type="text" id="editReps" placeholder="如 8-12" />
+        </label>
+        <label class="field">
+          <span class="field-label">组间休息</span>
+          <select id="editRest">
+            <option value="45">45 秒</option>
+            <option value="60">60 秒</option>
+            <option value="90">90 秒</option>
+            <option value="120">120 秒</option>
+            <option value="150">150 秒</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">动作要点</span>
+          <input type="text" id="editTip" />
+        </label>
+      </div>
+      <div class="edit-actions">
+        <button type="button" class="btn btn-primary" id="editSaveBtn">保存</button>
+        <button type="button" class="btn btn-ghost" id="editCancelBtn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 沉浸式训练 ==================== -->
+  <div class="session-overlay overlay" id="sessionOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="sessionDayTitle">
+    <div class="overlay-card glass-strong session-card">
+      <button class="overlay-close" id="sessionClose" type="button" aria-label="结束训练">×</button>
+      <div class="session-top">
+        <div class="session-day" id="sessionDayTitle"></div>
+        <div class="session-progress" id="sessionProgress"></div>
+      </div>
+      <div class="session-exercise" id="sessionExerciseName"></div>
+      <div class="session-gif" id="sessionGifWrap"><img id="sessionGif" alt="动作演示" loading="lazy" decoding="async" /></div>
+      <div class="session-meta" id="sessionMeta"></div>
+      <div class="session-set" id="sessionSetInfo"></div>
+      <div class="session-rest" id="sessionRest" hidden>
+        <div class="session-rest-label">组间休息</div>
+        <div class="session-rest-time" id="sessionRestTime"></div>
+      </div>
+      <div class="session-actions">
+        <button type="button" class="btn btn-primary btn-lg" id="sessionDoneBtn">完成本组 ✓</button>
+        <button type="button" class="btn btn-ghost" id="sessionSkipBtn" hidden>跳过休息</button>
+        <button type="button" class="btn btn-ghost" id="sessionEndBtn">结束训练</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 组间计时器 ==================== -->
+  <div class="timer-overlay overlay" id="timerOverlay" hidden role="dialog" aria-modal="true" aria-label="组间休息计时器">
+    <div class="overlay-card glass-strong timer-card">
+      <button class="overlay-close" id="timerClose" type="button" aria-label="关闭计时器">×</button>
+      <div class="timer-title" id="timerTitle">组间休息</div>
+      <div class="timer-display" id="timerDisplay" aria-live="polite">90</div>
+      <div class="timer-presets">
+        <button type="button" class="btn timer-preset" data-sec="60">60s</button>
+        <button type="button" class="btn timer-preset active" data-sec="90">90s</button>
+        <button type="button" class="btn timer-preset" data-sec="120">120s</button>
+        <button type="button" class="btn timer-preset" data-sec="150">150s</button>
+      </div>
+      <div class="timer-actions">
+        <button type="button" class="btn btn-primary btn-lg" id="timerToggle">开始</button>
+        <button type="button" class="btn btn-ghost" id="timerReset">重置</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/nutrition.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/training.js"></script>
+  <script src="js/diet.js"></script>
+  <script src="js/weight.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
