@@ -6,7 +6,7 @@ package-lock.json
 _debug/
 _recon/
 _gen/
-.vscode/.chrome-profile/
+.vscode/
 
 # 系统与编辑器
 .DS_Store
