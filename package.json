@@ -1,6 +1,6 @@
 {
   "name": "fit-daily",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "FitDaily 健身与饮食计划助手（本地版）：纯前端、零依赖、数据只存本机",
   "scripts": {

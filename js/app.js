@@ -12,7 +12,7 @@
   var STORAGE_KEY = 'fitdaily-state';
   var THEME_KEY = 'fitdaily-theme';
   var FONT_KEY = 'fitdaily-font';
-  var APP_VERSION = '1.2.0';
+  var APP_VERSION = '1.3.0';
 
   var VIEWS = ['home', 'training', 'diet', 'weight', 'settings'];
 
