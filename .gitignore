@@ -12,3 +12,6 @@ _gen/
 .DS_Store
 Thumbs.db
 *.log
+
+# 压缩包与备份
+*.zip
