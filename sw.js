@@ -4,7 +4,7 @@
  */
 'use strict';
 
-var CACHE_NAME = 'fitdaily-shell-20261103';
+var CACHE_NAME = 'fitdaily-shell-20261105';
 var PRECACHE = [
   './',
   './index.html',
