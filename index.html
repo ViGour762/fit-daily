@@ -54,6 +54,9 @@
       <button class="nav-btn side-link" data-view="weight" type="button">
         <span class="nav-ico" aria-hidden="true">◔</span><span>体重</span>
       </button>
+      <button class="nav-btn side-link" data-view="achievements" type="button">
+        <span class="nav-ico" aria-hidden="true">🏆</span><span>成就</span>
+      </button>
       <button class="nav-btn side-link" data-view="settings" type="button">
         <span class="nav-ico" aria-hidden="true">⚙</span><span>设置</span>
       </button>
@@ -297,6 +300,16 @@
         </div>
       </section>
 
+      <!-- ==================== 成就 ==================== -->
+      <section id="view-achievements" class="view" aria-label="我的成就">
+        <div class="glass-card">
+          <h2 class="panel-title">年度成就墙</h2>
+          <p class="profile-summary" id="achievementProgressText">当前年度计划完成度：0%</p>
+          <div class="achievement-grid" id="achievementGrid">
+            <!-- 徽章由JS自动生成 -->
+          </div>
+        </div>
+      </section>
       <!-- ==================== 设置 ==================== -->
       <section id="view-settings" class="view" aria-label="设置">
         <div class="glass-card">
@@ -508,6 +521,7 @@
   <script src="js/settings.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/achievements.js"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       window.addEventListener('load', function () {
